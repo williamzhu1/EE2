@@ -13,11 +13,38 @@ hall=DigitalInputDevice(4)
 reader = SimpleMFRC522()
 # Modified for servo
 myServo = Servo(17, frame_width=0.025, min_pulse_width=0.0005, max_pulse_width=0.0045)
+start = 0
 
 def play_buzzer():
     print("Bike stolen!")
     buzzer.play(Tone("A5"))
 
+def motor(status, lockStatus):
+    tm = str(int(time.time()))
+    if(lockStatus == 1):
+        # Modified for servo
+        myServo.max()
+        time.sleep(0.5)
+        myServo.mid()
+        time.sleep(0.5)
+        myServo.min()
+        time.sleep(0.5)
+        print("Unlock")
+        access = requests.get("https://studev.groept.be/api/a22ib2d02/scanHistory/" + \
+                              str(status) + "/" + tm + "/1")
+        unlock = requests.get("https://studev.groept.be/api/a22ib2d02/unlock")
+    else:
+        # Modified for servo
+        myServo.min()
+        time.sleep(0.5)
+        myServo.mid()
+        time.sleep(0.5)
+        myServo.max()
+        time.sleep(0.5)
+        print("Lock")
+        access = requests.get("https://studev.groept.be/api/a22ib2d02/scanHistory/" + \
+                              str(status) + "/" + tm + "/2")
+        lock = requests.get("https://studev.groept.be/api/a22ib2d02/lock")
 
 while True:
     response = requests.get('https://studev.groept.be/api/a22ib2d02/getMode')
@@ -29,6 +56,25 @@ while True:
             name = data[0]['name']
             lockStatus = data[0]['isLocked']
             AlarmStatus = data[0]['isAlarming']
+            manual = data[0]['manual']
+            alarmManual = data[0]['alarmManual']
+            print(manual)
+            if(start == 0):
+                start = 1
+                if(lockStatus == 1):
+                    myServo.min()
+                    time.sleep(0.5)
+                    myServo.mid()
+                    time.sleep(0.5)
+                    myServo.max()
+                    time.sleep(0.5)
+                else:
+                    myServo.max()
+                    time.sleep(0.5)
+                    myServo.mid()
+                    time.sleep(0.5)
+                    myServo.min()
+                    time.sleep(0.5)
         except KeyError:
             print('Error: Response JSON does not contain a "mode" field')
     else:
@@ -37,10 +83,11 @@ while True:
     if mode == 0:
         print('Read Mode')
         if(lockStatus == 1):
-            if(hall.value == 1):
-                hey=requests.get('https://studev.groept.be/api/a22ib2d02/Alarm')
-            if(hall.value == 0):
-                hey=requests.get('https://studev.groept.be/api/a22ib2d02/notAlarm')
+            if(alarmManual == 0):
+                if(hall.value == 1):
+                    hey=requests.get('https://studev.groept.be/api/a22ib2d02/Alarm')
+                if(hall.value == 0):
+                    hey=requests.get('https://studev.groept.be/api/a22ib2d02/notAlarm')
             if AlarmStatus == 1:
                 play_buzzer()
             else:
@@ -53,7 +100,12 @@ while True:
         print(status)
         if str(status) == 'None':
             print("No Card Found")
+            if(manual == 1):
+                done = requests.get('https://studev.groept.be/api/a22ib2d02/manualDone')
+                motor(404,lockStatus)
+                time.sleep(0.5)
         elif status != 'None':
+            done = requests.get('https://studev.groept.be/api/a22ib2d02/manualDone')
             scanned = requests.get('https://studev.groept.be/api/a22ib2d02/scan/' + str(status))
             if scanned.status_code == 200:
                 try:
@@ -71,31 +123,7 @@ while True:
             else:
                 print('Error: Could not retrieve mode from API endpoint')
             if(active == 1):
-                tm = str(int(time.time()))
-                if(lockStatus == 1):
-                    # Modified for servo
-                    myServo.max()
-                    time.sleep(0.5)
-                    myServo.mid()
-                    time.sleep(0.5)
-                    myServo.min()
-                    time.sleep(0.5)
-                    print("Unlock")
-                    access = requests.get("https://studev.groept.be/api/a22ib2d02/scanHistory/" + \
-                                          str(status) + "/" + tm + "/1")
-                    unlock = requests.get("https://studev.groept.be/api/a22ib2d02/unlock")
-                else:
-                    # Modified for servo
-                    myServo.min()
-                    time.sleep(0.5)
-                    myServo.mid()
-                    time.sleep(0.5)
-                    myServo.max()
-                    time.sleep(0.5)
-                    print("Lock")
-                    access = requests.get("https://studev.groept.be/api/a22ib2d02/scanHistory/" + \
-                                          str(status) + "/" + tm + "/2")
-                    lock = requests.get("https://studev.groept.be/api/a22ib2d02/lock")
+                motor(status,lockStatus)
             else:
                 print("Unauthorized access")
                 tm = str(int(time.time()))
